@@ -1,56 +1,56 @@
 #!/usr/bin/env python3
 
-from flask import Flask, make_response, jsonify, request, session
+from flask import Flask, request, session
 from flask_migrate import Migrate
-from flask_restful import Api, Resource
-
-from models import db, Article, User, ArticlesSchema, UserSchema
+from models import db, User, UserSchema
 
 app = Flask(__name__)
-app.secret_key = b'Y\xf1Xz\x00\xad|eQ\x80t \xca\x1a\x10K'
+app.secret_key = b'a\xdb\xd2\x13\x93\xc1\xe9\x97\xef2\xe3\x004U\xd1Z'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.json.compact = False
 
 migrate = Migrate(app, db)
-
 db.init_app(app)
 
-api = Api(app)
 
-class ClearSession(Resource):
+@app.get("/clear")
+def clear():
+    session.clear()
+    return {}, 204
 
-    def delete(self):
-    
-        session['page_views'] = None
-        session['user_id'] = None
 
-        return {}, 204
+@app.post("/login")
+def login():
+    data = request.get_json() or {}
+    username = data.get("username")
 
-class IndexArticle(Resource):
-    
-    def get(self):
-        articles = [ArticlesSchema().dump(article) for article in Article.query.all()]
-        return articles, 200
+    user = User.query.filter(User.username == username).first()
 
-class ShowArticle(Resource):
+    if user:
+        session["user_id"] = user.id
+        return UserSchema().dump(user), 200
 
-    def get(self, id):
-        session['page_views'] = 0 if not session.get('page_views') else session.get('page_views')
-        session['page_views'] += 1
+    return {}, 401
 
-        if session['page_views'] <= 3:
 
-            article = Article.query.filter(Article.id == id).first()
-            article_json = ArticlesSchema.dump(article)
+@app.delete("/logout")
+def logout():
+    session.pop("user_id", None)
+    return "", 204
 
-            return make_response(article_json, 200)
 
-        return {'message': 'Maximum pageview limit reached'}, 401
+@app.get("/check_session")
+def check_session():
+    user_id = session.get("user_id")
 
-api.add_resource(ClearSession, '/clear')
-api.add_resource(IndexArticle, '/articles')
-api.add_resource(ShowArticle, '/articles/<int:id>')
+    if user_id:
+        user = User.query.get(user_id)
+        if user:
+            return UserSchema().dump(user), 200
 
-if __name__ == '__main__':
+    return {}, 401
+
+
+if __name__ == "__main__":
     app.run(port=5555, debug=True)
